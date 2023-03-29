@@ -58,7 +58,7 @@ void printHistogram(Pixel **pixels, int width, int height) {
 int main(int argc, char const *argv[])
 {
     // open the file
-    FILE* inputFilePointer = fopen("logoC.bmp", "rb");
+    FILE* inputFilePointer = fopen("tux.bmp", "rb");
     if (inputFilePointer == NULL)
     {
         printf("Error while opening a file.");
@@ -68,13 +68,39 @@ int main(int argc, char const *argv[])
     // Read the header data
     BITMAPFILEHEADER fileHeader;
     BITMAPINFOHEADER fileInfoHeader;
+    unsigned char *fileFullHeader = malloc(fileHeader.bfOffBits - sizeof(fileHeader) - sizeof(fileInfoHeader));
     fread(&fileHeader, sizeof(BITMAPFILEHEADER), 1, inputFilePointer);
     fread(&fileInfoHeader, sizeof(BITMAPINFOHEADER), 1, inputFilePointer);
+    fread(fileFullHeader, fileHeader.bfOffBits - sizeof(fileHeader) - sizeof(fileInfoHeader), 1, inputFilePointer);
 
     Pixel **pixels = putIntoPixels(inputFilePointer, fileHeader, fileInfoHeader);
 
-    // printHistogram(pixels, fileInfoHeader.biWidth, fileInfoHeader.biHeight);
+    FILE* outputFilePointer = fopen("greyscaletux.bmp", "wb");
+    if (outputFilePointer == NULL) {
+        printf("Error while opening output file.");
+        return 1;
+    }
+    fwrite(&fileHeader, 1, sizeof(BITMAPFILEHEADER), outputFilePointer);
+    fwrite(&fileInfoHeader, 1, sizeof(BITMAPINFOHEADER), outputFilePointer);
+    fwrite(fileFullHeader, 1, fileHeader.bfOffBits - sizeof(fileHeader) - sizeof(fileInfoHeader), outputFilePointer);
+    int padding = (floor((fileInfoHeader.biBitCount * fileInfoHeader.biWidth + 31) / 32) * 4) - fileInfoHeader.biWidth * 3;
+    unsigned char pixelPadding[3] = {0, 0, 0};
+    for (int i = 0; i < fileInfoHeader.biHeight; i++) {
+        for (int j = 0; j < fileInfoHeader.biWidth; j++) {
+            uint8_t blue = pixels[i][j].blue;
+            uint8_t green = pixels[i][j].green;
+            uint8_t red = pixels[i][j].red;
+            int meanValue = (blue + green + red) / 3;
+            unsigned char meanPixelValues[3] = {meanValue, meanValue, meanValue};
+            fwrite(meanPixelValues, 3, 1, outputFilePointer);
+        }
+        for (int k = 0; k < padding; k++) {
+            fwrite(pixelPadding, 3, 1, outputFilePointer);
+        }
+    }
 
+    // printHistogram(pixels, fileInfoHeader.biWidth, fileInfoHeader.biHeight);
+    print_header(fileHeader, fileInfoHeader);
 
     fclose(inputFilePointer);
     for (int i = 0; i < fileInfoHeader.biHeight; i++) {
