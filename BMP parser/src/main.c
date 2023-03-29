@@ -1,45 +1,6 @@
-#include <stdio.h>
-#include <stdint.h>
-#include <math.h>
-#include <stdlib.h>
+#include <utils.h>
 
-typedef uint16_t WORD;
-typedef uint32_t DWORD;
-typedef int32_t LONG;
-
-
-// https://docs.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-bitmapfileheader
-#pragma pack(push, 1)
-typedef struct tagBITMAPFILEHEADER {
-  WORD  bfType;
-  DWORD bfSize;
-  WORD  bfReserved1;
-  WORD  bfReserved2;
-  DWORD bfOffBits;
-} BITMAPFILEHEADER, *LPBITMAPFILEHEADER, *PBITMAPFILEHEADER;
-
-// https://docs.microsoft.com/pl-pl/previous-versions/dd183376(v=vs.85)
-typedef struct tagBITMAPINFOHEADER {
-  DWORD biSize;
-  LONG  biWidth;
-  LONG  biHeight;
-  WORD  biPlanes;
-  WORD  biBitCount;
-  DWORD biCompression;
-  DWORD biSizeImage;
-  LONG  biXPelsPerMeter;
-  LONG  biYPelsPerMeter;
-  DWORD biClrUsed;
-  DWORD biClrImportant;
-} BITMAPINFOHEADER, *LPBITMAPINFOHEADER, *PBITMAPINFOHEADER;
-
-typedef struct Pixel {
-  uint8_t blue;
-  uint8_t green;
-  uint8_t red;
-} Pixel;
-#pragma pack(pop)
-
+// Exercise 1
 void print_header(BITMAPFILEHEADER fileHeader, BITMAPINFOHEADER fileInfoHeader) {
     printf("BITMAPFILEHEADER:\n");
     printf("  bfType:          0x%04X\n", fileHeader.bfType);
@@ -62,6 +23,7 @@ void print_header(BITMAPFILEHEADER fileHeader, BITMAPINFOHEADER fileInfoHeader) 
     printf("  biClrImportant:  %0u\n", fileInfoHeader.biClrImportant);
 }
 
+// Exercise 2
 void printHistogram(Pixel **pixels, int width, int height) {
     int red_count[16] = {0};
     int green_count[16] = {0};
@@ -95,45 +57,27 @@ void printHistogram(Pixel **pixels, int width, int height) {
 
 int main(int argc, char const *argv[])
 {
+    // open the file
     FILE* inputFilePointer = fopen("logoC.bmp", "rb");
     if (inputFilePointer == NULL)
     {
-        printf("Blocked");
-        return 0;
+        printf("Error while opening a file.");
+        return 1;
     }
 
+    // Read the header data
     BITMAPFILEHEADER fileHeader;
     BITMAPINFOHEADER fileInfoHeader;
-
     fread(&fileHeader, sizeof(BITMAPFILEHEADER), 1, inputFilePointer);
     fread(&fileInfoHeader, sizeof(BITMAPINFOHEADER), 1, inputFilePointer);
 
-    int width = fileInfoHeader.biWidth;
-    int height = fileInfoHeader.biHeight;
-    int padding = (floor((fileInfoHeader.biBitCount * fileInfoHeader.biWidth + 31) / 32) * 4) - fileInfoHeader.biWidth * 3; // Padding is used to align the rows of pixels to multiples of 4 bytes
+    Pixel **pixels = putIntoPixels(inputFilePointer, fileHeader, fileInfoHeader);
 
-    // Allocate memory for the pixels 
-    Pixel **pixels = malloc(height * sizeof(Pixel *));
-    for (int i = 0; i < height; i++) {
-        pixels[i] = (Pixel *)malloc(width * sizeof(Pixel));
-    }
+    // printHistogram(pixels, fileInfoHeader.biWidth, fileInfoHeader.biHeight);
 
-    fseek(inputFilePointer, fileHeader.bfOffBits, SEEK_SET); // Move the file pointer to the beginning of the bitmap data
 
-    for (int i = 0; i < height; i++) {
-        for (int j = 0; j < width; j++) {
-            Pixel pixel;
-            fread(&pixel.blue, sizeof(uint8_t), 1, inputFilePointer);
-            fread(&pixel.green, sizeof(uint8_t), 1, inputFilePointer);
-            fread(&pixel.red, sizeof(uint8_t), 1, inputFilePointer);
-            pixels[i][j] = pixel;
-        }
-        fseek(inputFilePointer, padding, SEEK_CUR); // Move the file pointer to the beginning of the next row of pixels
-    }
-
-    printHistogram(pixels, width, height);
     fclose(inputFilePointer);
-    for (int i = 0; i < height; i++) {
+    for (int i = 0; i < fileInfoHeader.biHeight; i++) {
         free(pixels[i]); 
     }
     free(pixels);
