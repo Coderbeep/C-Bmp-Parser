@@ -1,5 +1,6 @@
 #include <utils.h>
 #include <stdlib.h>
+#include <string.h>
 
 // Exercise 1
 void print_header(BITMAPFILEHEADER fileHeader, BITMAPINFOHEADER fileInfoHeader) {
@@ -81,96 +82,93 @@ void intoGreyscale(FILE* outputFilePointer, BITMAPFILEHEADER fileHeader,
 
 // TODO: open files separately in every exercise
 // First open a file, read the header, info header and the rest
-// anc close the file
+// and close the file
 
 // TODO: First 8 bytes of encoding are used for the number
 // describing how many characters you want to encode
 // print alerts if more
 
+void putToBinary(char letter, char *dest) {
+    for (int i = 7; i >= 0; i--) {
+        int bit = (letter >> i) & 1;
+        dest[7-i] = bit + '0';
+    }
+    dest[8] = '\0';
+}
 
-int main(int argc, char const *argv[])
-{
-    // open the file
+void steganography(char *textToEncode) {
     FILE* inputFilePointer = fopen("tux.bmp", "rb+");
     if (inputFilePointer == NULL)
     {
         printf("Error while opening a file.");
-        return 1;
+        return;
     }
 
     // Read the header data
     BITMAPFILEHEADER fileHeader;
     BITMAPINFOHEADER fileInfoHeader;
-    unsigned char *fileFullHeader = malloc(fileHeader.bfOffBits - sizeof(fileHeader) - sizeof(fileInfoHeader));
     fread(&fileHeader, sizeof(BITMAPFILEHEADER), 1, inputFilePointer);
     fread(&fileInfoHeader, sizeof(BITMAPINFOHEADER), 1, inputFilePointer);
+
+    unsigned char *fileFullHeader = malloc(fileHeader.bfOffBits - sizeof(fileHeader) - sizeof(fileInfoHeader));
     fread(fileFullHeader, fileHeader.bfOffBits - sizeof(fileHeader) - sizeof(fileInfoHeader), 1, inputFilePointer);
-
-    // Pixel **pixels = putIntoPixels(inputFilePointer, fileHeader, fileInfoHeader);
-
-    FILE* outputFilePointer = fopen("greyscaletux.bmp", "wb");
-    if (outputFilePointer == NULL) {
-        printf("Error while opening output file.");
-        return 1;
-    }
 
     int padding = (floor((fileInfoHeader.biBitCount * fileInfoHeader.biWidth + 31) / 32) * 4) - fileInfoHeader.biWidth * 3;
     int numLettersLine = fileInfoHeader.biWidth * 3 / 8;
     printf("Padding after a line (bytes): %d\nNumber of letters that can fit in a line: %d\n", padding, numLettersLine);
-    
-    char letter = 'H';
-    char output[9];
-    for (int i = 7; i >= 0; i--) {
-        int bit = (letter >> i) & 1;
-        output[7-i] = bit + '0';
-    }
-    output[8] = '\0';
-    printf("%s\n", output);
 
-    char c = strtol(output, 0, 2);
-    printf("%c\n", c);
+    char letters[strlen(textToEncode) + 1][9];
+    putToBinary(strlen(textToEncode), letters[0]); 
+    // Put the number as a first thing to encode
+    // the number represents the length of a sentence to encode
 
-    unsigned char pixelsLetter[8];
-    fseek(inputFilePointer, fileHeader.bfOffBits, SEEK_SET);
-    fread(pixelsLetter, 8, 1, inputFilePointer);
-    for (int  i = 0; i < 8; i ++) {
-        printf("%d ", pixelsLetter[i]);
+    for (int i = 1; i < strlen(textToEncode) + 1; i++) {
+        putToBinary(textToEncode[i - 1], letters[i]);
     }
-    printf("\n");
-    for (int i = 0; i < 8; i++) {
-        int pixelVal = (int) pixelsLetter[i];
-        if (output[i] == '0'){
-            if (pixelVal % 2 == 1) {
-                pixelVal -= 1;
-            }
-        }
-        else {
-            if (pixelVal % 2 == 0) {
-                pixelVal += 1;
-            }
-        }
-        pixelsLetter[i] = pixelVal;
+
+    for (int i = 0; i < strlen(textToEncode) + 1; i++) {
+        printf("%s\n", letters[i]);
     }
-    
-    for (int  i = 0; i < 8; i ++) {
-        printf("%d ", pixelsLetter[i]);
-    }
-    fseek(inputFilePointer, fileHeader.bfOffBits, SEEK_SET);
-    // unsigned char outputGood[8];
+    // Storing binary representation of chars in the sentence: DONE
+    // char *output = letters[0];
+    // char c = strtol(output, 0, 2);
+    // printf("%c\n", c);
+
+    // for (int i = 0; i < strlen(textToEncode) + 1; )
+    // unsigned char pixelsLetter[8];
+    // fseek(inputFilePointer, fileHeader.bfOffBits, SEEK_SET);
+    // fread(pixelsLetter, 8, 1, inputFilePointer);
+    // for (int  i = 0; i < 8; i ++) {
+    //     printf("%d ", pixelsLetter[i]);
+    // }
+    // printf("\n");
     // for (int i = 0; i < 8; i++) {
-    //     outputGood[i] = (unsigned char) output[i];
+    //     int pixelVal = (int) pixelsLetter[i];
+    //     if (output[i] == '0'){
+    //         if (pixelVal % 2 == 1) {
+    //             pixelVal -= 1;
+    //         }
+    //     }
+    //     else {
+    //         if (pixelVal % 2 == 0) {
+    //             pixelVal += 1;
+    //         }
+    //     }
+    //     pixelsLetter[i] = pixelVal;
+    // };
+    
+    // for (int  i = 0; i < 8; i ++) {
+    //     printf("%d ", pixelsLetter[i]);
     // }
-
-    fwrite(pixelsLetter, 8, 1, inputFilePointer);
-    // intoGreyscale(outputFilePointer, fileHeader, fileInfoHeader, fileFullHeader, pixels);
-    // printHistogram(pixels, fileInfoHeader.biWidth, fileInfoHeader.biHeight);
-    // print_header(fileHeader, fileInfoHeader);
-
+    // fseek(inputFilePointer, fileHeader.bfOffBits, SEEK_SET);
+    // fwrite(pixelsLetter, 8, 1, inputFilePointer);
     fclose(inputFilePointer);
-    fclose(outputFilePointer);
-    // for (int i = 0; i < fileInfoHeader.biHeight; i++) {
-    //     free(pixels[i]); 
-    // }
-    // free(pixels);
+}
+
+
+int main(int argc, char const *argv[])
+{
+    char *textToEncode = "Help!";
+    steganography(textToEncode);
     return 0;
 }
