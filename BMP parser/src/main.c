@@ -88,6 +88,7 @@ void intoGreyscale(FILE* outputFilePointer, BITMAPFILEHEADER fileHeader,
 // describing how many characters you want to encode
 // print alerts if more
 
+// transforms the letter into ASCII binary representation
 void putToBinary(char letter, char *dest) {
     for (int i = 7; i >= 0; i--) {
         int bit = (letter >> i) & 1;
@@ -126,49 +127,89 @@ void steganography(char *textToEncode) {
         putToBinary(textToEncode[i - 1], letters[i]);
     }
 
+    unsigned char pixelsLetters[strlen(textToEncode) + 1][8];
     for (int i = 0; i < strlen(textToEncode) + 1; i++) {
-        printf("%s\n", letters[i]);
+        fseek(inputFilePointer, fileHeader.bfOffBits + (i * 8), SEEK_SET);
+        fread(pixelsLetters[i], 8, 1, inputFilePointer);
+        
+        for (int j = 0; j < 8; j++) {
+            if (letters[i][j] == '0') {
+                if ((int) pixelsLetters[i][j] % 2 == 1) {
+                    pixelsLetters[i][j] -= 1;
+                }
+            }
+            else {
+                if ((int) pixelsLetters[i][j] % 2 == 0) {
+                    pixelsLetters[i][j] += 1;
+                }
+            }
+        }
     }
-    // Storing binary representation of chars in the sentence: DONE
-    // char *output = letters[0];
-    // char c = strtol(output, 0, 2);
-    // printf("%c\n", c);
 
-    // for (int i = 0; i < strlen(textToEncode) + 1; )
-    // unsigned char pixelsLetter[8];
-    // fseek(inputFilePointer, fileHeader.bfOffBits, SEEK_SET);
-    // fread(pixelsLetter, 8, 1, inputFilePointer);
-    // for (int  i = 0; i < 8; i ++) {
-    //     printf("%d ", pixelsLetter[i]);
-    // }
-    // printf("\n");
-    // for (int i = 0; i < 8; i++) {
-    //     int pixelVal = (int) pixelsLetter[i];
-    //     if (output[i] == '0'){
-    //         if (pixelVal % 2 == 1) {
-    //             pixelVal -= 1;
-    //         }
-    //     }
-    //     else {
-    //         if (pixelVal % 2 == 0) {
-    //             pixelVal += 1;
-    //         }
-    //     }
-    //     pixelsLetter[i] = pixelVal;
-    // };
-    
-    // for (int  i = 0; i < 8; i ++) {
-    //     printf("%d ", pixelsLetter[i]);
-    // }
-    // fseek(inputFilePointer, fileHeader.bfOffBits, SEEK_SET);
-    // fwrite(pixelsLetter, 8, 1, inputFilePointer);
+    fseek(inputFilePointer, fileHeader.bfOffBits, SEEK_SET);
+    fwrite(pixelsLetters, 8 * (strlen(textToEncode) + 1), 1, inputFilePointer);
     fclose(inputFilePointer);
 }
 
+void takeLeastSignBits(unsigned char* input, unsigned char* output) {
+    for (int i = 0; i < 8; i++) {
+        if (input[i] % 2 == 0) {
+            output[i] = '0';
+        }
+        else {
+            output[i] = '1';
+        }
+    }
+}
+
+// TODO: handle the padding while encoding and decoding information
+// from the file
+
+void decypher() {
+    FILE* inputFilePointer = fopen("tux.bmp", "rb");
+    if (inputFilePointer == NULL)
+    {
+        printf("Error while opening a file.");
+        return;
+    }
+    BITMAPFILEHEADER fileHeader;
+    BITMAPINFOHEADER fileInfoHeader;
+    fread(&fileHeader, sizeof(BITMAPFILEHEADER), 1, inputFilePointer);
+    fread(&fileInfoHeader, sizeof(BITMAPINFOHEADER), 1, inputFilePointer);
+
+    unsigned char *fileFullHeader = malloc(fileHeader.bfOffBits - sizeof(fileHeader) - sizeof(fileInfoHeader));
+    fread(fileFullHeader, fileHeader.bfOffBits - sizeof(fileHeader) - sizeof(fileInfoHeader), 1, inputFilePointer);
+    fseek(inputFilePointer, fileHeader.bfOffBits, SEEK_SET);
+
+    unsigned char messageLengthBinary[8];
+    fread(messageLengthBinary, 8, 1, inputFilePointer);
+    
+    //get the length of the information
+    unsigned char output[8];
+    takeLeastSignBits(messageLengthBinary, output);
+    long int length = strtol(output, NULL, 2);
+    printf("Length: %lu\n", length);
+
+    unsigned char message[length + 1]; // +1 for '\0' 
+    for (int i = 0; i < length; i++) {
+        unsigned char messageBinary[8];
+        fread(messageBinary, 8, 1, inputFilePointer);
+
+        unsigned char output[8];
+        takeLeastSignBits(messageBinary, output);
+        long int letter = strtol(output, NULL, 2);
+        message[i] = (char) letter;
+    }
+    message[length] = '\0';
+    printf("%s ", message);
+
+    fclose(inputFilePointer);
+}
 
 int main(int argc, char const *argv[])
 {
-    char *textToEncode = "Help!";
+    char *textToEncode = "Daniel jest superinteligentny. Chwala mu!";
     steganography(textToEncode);
+    decypher();
     return 0;
 }
