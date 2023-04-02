@@ -3,7 +3,21 @@
 #include <string.h>
 
 // Exercise 1
-void print_header(BITMAPFILEHEADER fileHeader, BITMAPINFOHEADER fileInfoHeader) {
+void print_header(char const *filename) {
+
+    FILE* inputFilePointer = fopen(filename, "rb");
+    if (inputFilePointer == NULL)
+    {
+        printf("Error while opening a file.");
+        return;
+    }
+
+    // Read the header data
+    BITMAPFILEHEADER fileHeader;
+    BITMAPINFOHEADER fileInfoHeader;
+    fread(&fileHeader, sizeof(BITMAPFILEHEADER), 1, inputFilePointer);
+    fread(&fileInfoHeader, sizeof(BITMAPINFOHEADER), 1, inputFilePointer);
+
     printf("BITMAPFILEHEADER:\n");
     printf("  bfType:          0x%04X\n", fileHeader.bfType);
     printf("  bfSize:          %0u\n", fileHeader.bfSize);
@@ -23,62 +37,11 @@ void print_header(BITMAPFILEHEADER fileHeader, BITMAPINFOHEADER fileInfoHeader) 
     printf("  biYPelsPerMeter: %0d\n", fileInfoHeader.biYPelsPerMeter);
     printf("  biClrUsed:       %0u\n", fileInfoHeader.biClrUsed);
     printf("  biClrImportant:  %0u\n", fileInfoHeader.biClrImportant);
+
+    fclose(inputFilePointer);
 }
 
 // Exercise 2
-void printHistogram(Pixel **pixels, int width, int height) {
-    int red_count[16] = {0};
-    int green_count[16] = {0};
-    int blue_count[16] = {0};
-
-    int numberOfPixels = 0;
-
-    for (int i = 0; i < width; i++) {
-        for (int j = 0; j < height; j++) {
-            red_count[pixels[i][j].red / 16]++;
-            green_count[pixels[i][j].green / 16]++;
-            blue_count[pixels[i][j].blue / 16]++;
-
-            numberOfPixels++;
-        }
-    }
-
-    printf("Blue:\n");
-    for (int i = 0; i < 16; i++) {
-        printf("  %d-%d: %.2f%%\n", i * 16, (i + 1) * 16 - 1, (float)blue_count[i]/ (float) numberOfPixels * 100);
-    }
-    printf("Green:\n");
-    for (int i = 0; i < 16; i++) {
-        printf("  %d-%d: %.2f%%\n", i * 16, (i + 1) * 16 - 1, (float)green_count[i]/ (float) numberOfPixels * 100);
-    }
-    printf("Red:\n");
-    for (int i = 0; i < 16; i++) {
-        printf("  %d-%d: %.2f%%\n", i * 16, (i + 1) * 16 - 1, (float)red_count[i]/ (float) numberOfPixels * 100);
-    }
-}
-
-void intoGreyscale(FILE* outputFilePointer, BITMAPFILEHEADER fileHeader, 
-                   BITMAPINFOHEADER fileInfoHeader, unsigned char* fileFullHeader, Pixel **pixels) {
-
-    fwrite(&fileHeader, 1, sizeof(BITMAPFILEHEADER), outputFilePointer);
-    fwrite(&fileInfoHeader, 1, sizeof(BITMAPINFOHEADER), outputFilePointer);
-    fwrite(fileFullHeader, 1, fileHeader.bfOffBits - sizeof(fileHeader) - sizeof(fileInfoHeader), outputFilePointer);
-    int padding = (floor((fileInfoHeader.biBitCount * fileInfoHeader.biWidth + 31) / 32) * 4) - fileInfoHeader.biWidth * 3;
-    unsigned char pixelPadding[3] = {0, 0, 0};
-    for (int i = 0; i < fileInfoHeader.biHeight; i++) {
-        for (int j = 0; j < fileInfoHeader.biWidth; j++) {
-            uint8_t blue = pixels[i][j].blue;
-            uint8_t green = pixels[i][j].green;
-            uint8_t red = pixels[i][j].red;
-            int meanValue = (blue + green + red) / 3;
-            unsigned char meanPixelValues[3] = {meanValue, meanValue, meanValue};
-            fwrite(meanPixelValues, 3, 1, outputFilePointer);
-        }
-        for (int k = 0; k < padding; k++) {
-            fwrite(pixelPadding, 3, 1, outputFilePointer);
-        }
-    }
-}
 
 // TODO: open files separately in every exercise
 // First open a file, read the header, info header and the rest
@@ -97,8 +60,8 @@ void putToBinary(char letter, char *dest) {
     dest[8] = '\0';
 }
 
-void steganography(char *textToEncode) {
-    FILE* inputFilePointer = fopen("tux.bmp", "rb+");
+void steganography(const char *textToEncode, const char* inputFilename) {
+    FILE* inputFilePointer = fopen(inputFilename, "rb+");
     if (inputFilePointer == NULL)
     {
         printf("Error while opening a file.");
@@ -116,8 +79,6 @@ void steganography(char *textToEncode) {
 
     int padding = (floor((fileInfoHeader.biBitCount * fileInfoHeader.biWidth + 31) / 32) * 4) - fileInfoHeader.biWidth * 3;
     int numLettersLine = fileInfoHeader.biWidth * 3 / 8;
-    printf("Padding after a line (bytes): %d\nNumber of letters that can fit in a line: %d\n", padding, numLettersLine);
-
     char letters[strlen(textToEncode) + 1][9];
     putToBinary(strlen(textToEncode), letters[0]); 
     // Put the number as a first thing to encode
@@ -165,8 +126,8 @@ void takeLeastSignBits(unsigned char* input, unsigned char* output) {
 // TODO: handle the padding while encoding and decoding information
 // from the file
 
-void decypher() {
-    FILE* inputFilePointer = fopen("tux.bmp", "rb");
+void decypher(const char* filename) {
+    FILE* inputFilePointer = fopen(filename, "rb");
     if (inputFilePointer == NULL)
     {
         printf("Error while opening a file.");
@@ -188,7 +149,6 @@ void decypher() {
     unsigned char output[8];
     takeLeastSignBits(messageLengthBinary, output);
     long int length = strtol(output, NULL, 2);
-    printf("Length: %lu\n", length);
 
     unsigned char message[length + 1]; // +1 for '\0' 
     for (int i = 0; i < length; i++) {
@@ -201,15 +161,88 @@ void decypher() {
         message[i] = (char) letter;
     }
     message[length] = '\0';
-    printf("%s ", message);
+    printf("%s \n", message);
 
     fclose(inputFilePointer);
 }
 
+// TODO: Check first exercise
+// TODO: Check second exercise
+// TODO: Check thrid exercise
+// TODO: Check Fourth exercise
+
+// TODO: Print error messages when arg too long
+// TODO Check file parameters before performing operations on them.
+
 int main(int argc, char const *argv[])
-{
-    char *textToEncode = "Daniel jest superinteligentny. Chwala mu!";
-    steganography(textToEncode);
-    decypher();
+{   
+    // Operating on command-line arguments:
+    if (argc == 2) {
+        char const *filename = argv[1];
+        FILE* inputFilePointer = fopen(filename, "rb");
+        if (inputFilePointer == NULL) {
+            printf("Error while opening a file.");
+            return 1;
+        }
+        BITMAPFILEHEADER fileHeader;
+        BITMAPINFOHEADER fileInfoHeader;
+        fread(&fileHeader, sizeof(BITMAPFILEHEADER), 1, inputFilePointer);
+        fread(&fileInfoHeader, sizeof(BITMAPINFOHEADER), 1, inputFilePointer);
+        print_header(filename);
+        printf("\n");
+        
+        if (fileInfoHeader.biCompression == 0 && fileInfoHeader.biBitCount == 24) {
+            Pixel** pixels = putIntoPixels(filename);
+            printHistogram(filename, pixels);
+        }
+        else {
+            printf("Histogram calculation unsupported for this kind of image.");
+        }
+        fclose(inputFilePointer);
+
+        printf("\nDecode steganography? [y/n]");
+        char answer;
+        scanf(" %c", &answer);
+        if (answer == 'y') {
+            decypher(filename);
+        }
+        else if (answer == 'n') {
+            printf("Steganography is not going to be decoded.");
+        }
+        else {
+            printf("Invalid input.");
+        }
+    }
+
+    else if (argc == 3) {
+        char const *inputFilename = argv[1];
+        char const *outputFilename = argv[2];
+
+        FILE* inputFilePointer = fopen(inputFilename, "rb");
+        if (inputFilePointer == NULL) {
+            printf("Error while opening a file.");
+            return 1;
+        }
+        BITMAPFILEHEADER fileHeader;
+        BITMAPINFOHEADER fileInfoHeader;
+        fread(&fileHeader, sizeof(BITMAPFILEHEADER), 1, inputFilePointer);
+        fread(&fileInfoHeader, sizeof(BITMAPINFOHEADER), 1, inputFilePointer);
+
+        if (fileInfoHeader.biCompression == 0 && fileInfoHeader.biBitCount == 24) {
+            Pixel** pixels = putIntoPixels(inputFilename);
+            intoGreyscale(inputFilename, outputFilename, pixels);
+        }
+        fclose(inputFilePointer);
+    }
+
+    else if (argc == 4) {
+        char const *inputFilename = argv[1];
+        char const *outputFilename = argv[2];
+        char const *message = argv[3];
+        Pixel **pixels = putIntoPixels(inputFilename);
+
+        copyFile(inputFilename, outputFilename, pixels);
+        steganography(message, outputFilename);
+    }
     return 0;
 }
